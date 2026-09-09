@@ -129,22 +129,36 @@ jobs:
         shell: bash
         run: |
           # The 4.19 elish Makefile forces `-no-integrated-as`, so clang locates the
-          # external assembler as $(prefix)$(CLANG_TRIPLE)as, i.e. aarch64-linux-gnu-as.
-          # The bundled android-4.9 gcc only ships aarch64-linux-android-* names, so
-          # add GNU-named symlinks (incl. as/elfedit which the Makefile probes) so clang
-          # --prefix resolves them instead of falling back to the x86 host /usr/bin/as.
-          BIN=$(find $GITHUB_WORKSPACE/gcc-64 -maxdepth 2 -type d -name bin | head -n1)
-          if [ -z "$BIN" ] || [ ! -d "$BIN" ]; then
-            echo "[-] gcc-64/bin not found; cannot add GNU symlinks"
+          # external assembler as $(gcc-toolchain)/$(CLANG_TRIPLE-as) i.e.
+          # aarch64-linux-gnu-as. The bundled android-4.9 gcc is unpacked with an
+          # extra dir layer and only ships aarch64-linux-android-* names, so add
+          # GNU-named symlinks so clang --prefix resolves them instead of falling
+          # back to the x86 host /usr/bin/as (which rejects -EL).
+          BIN="$GITHUB_WORKSPACE/gcc-64/bin"
+          if [ ! -d "$BIN" ]; then
+            echo "[-] gcc-64 bin dir not found: $BIN"
+            find $GITHUB_WORKSPACE/gcc-64 -maxdepth 4 -type d | sed 's/^/  DIR: /' | head -40
             exit 1
           fi
           echo "[+] gcc-64 bin dir: $BIN"
-          for t in ar as ld nm objcopy objdump readelf strip gcov gprof size strings elfedit ld.bfd ld.gold; do
-            if [ -f "$BIN/aarch64-linux-android-$t" ] && [ ! -e "$BIN/aarch64-linux-gnu-$t" ]; then
-              ln -sf "aarch64-linux-android-$t" "$BIN/aarch64-linux-gnu-$t"
+          # Discover every android-named tool in the dir and mirror a gnu name.
+          shopt -s nullglob
+          for f in "$BIN"/aarch64-linux-android-*; do
+            [ -e "$f" ] || continue
+            base=$(basename "$f")
+            gnu=${base/aarch64-linux-android-/aarch64-linux-gnu-}
+            if [ "$gnu" != "$base" ] && [ ! -e "$BIN/$gnu" ]; then
+              ln -sf "$base" "$BIN/$gnu"
+              echo "  + $gnu -> $base"
             fi
           done
-          ls -l "$BIN"/aarch64-linux-gnu-* 2>&1 | sed 's/^/  /' | head -40
+          # Guarantee the two binaries the Makefile probes exist.
+          for t in as elfedit ld; do
+            if [ ! -e "$BIN/aarch64-linux-gnu-$t" ]; then
+              echo "  [-] missing aarch64-linux-gnu-$t"
+            fi
+          done
+          echo "[done] GNU-prefix symlinks ready"
 
       - name: 🪝 Patch Kernel of SUSFS
         uses: ./.github/workflows/patch-susfs
