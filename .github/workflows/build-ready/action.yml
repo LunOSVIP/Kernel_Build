@@ -255,11 +255,23 @@ runs:
 
           if [[ "${{ env.KERNELSU_SOURCE }}" == *SukiSU* ]] || [[ "${{ env.KERNELSU_AUTO_FORK }}" == "sukisu" ]]; then
             cp /tmp/Patches/Patch/sukisu_ultra_fixed.patch ./
-            # --forward: SukiSU-Ultra 'builtin' already contains some hunks (e.g. runtime/ksud.c);
-            # skip already-applied hunks and apply the rest, without aborting under set -e.
-            patch --forward -p1 < sukisu_ultra_fixed.patch
-
-            echo "[+] SukiSU-Ultra mitigation measures implemented."
+            # SukiSU-Ultra 'builtin' branch already carries some of these fixes (e.g.
+            # runtime/ksud.c), so full application can hit 'reversed / already applied'
+            # hunks that produce *.rej and a non-zero exit under set -e. Apply tolerantly:
+            # the only reject we accept is the already-applied runtime/ksud.c hunk;
+            # any other reject is a real failure and aborts the build.
+            set +e
+            patch --forward --batch -p1 < sukisu_ultra_fixed.patch
+            rc=$?
+            other_rejects=$(find . -name "*.rej" ! -name "runtime/ksud.c.rej" -print -quit)
+            if [ -n "$other_rejects" ]; then
+                echo "[-] unexpected patch rejects:"
+                find . -name "*.rej"
+                exit 1
+            fi
+            rm -f runtime/ksud.c.rej
+            echo "[+] SukiSU-Ultra mitigation measures implemented (patch rc=$rc)."
+            set -e
 
           else
             echo "[-] Your KernelSU Fork needn't it, Skipped."
