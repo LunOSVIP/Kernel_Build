@@ -263,7 +263,7 @@ runs:
             set +e
             patch --forward --batch -p1 < sukisu_ultra_fixed.patch
             rc=$?
-            other_rejects=$(find . -name "*.rej" ! -name "runtime/ksud.c.rej" -print -quit)
+            other_rejects=$(find . -name "*.rej" -print | grep -v 'runtime/ksud' | head -n1 || true)
             if [ -n "$other_rejects" ]; then
                 echo "[-] unexpected patch rejects:"
                 find . -name "*.rej"
