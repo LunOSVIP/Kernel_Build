@@ -52,11 +52,11 @@ for i in "${patch_files[@]}"; do
         fi
 
         if grep -q "__do_execve_file" "fs/exec.c"; then
-            sed -i '/static int __do_execve_file(int fd, struct filename \*filename,/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_su_compat_enabled;\nextern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,\n\t\t\tvoid *envp, int *flags);\nextern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr, void *argv,\n\t\t\t\tvoid *envp, int *flags);\n#endif' fs/exec.c
+            sed -i '/static int __do_execve_file(int fd, struct filename \*filename,/i #ifdef CONFIG_KSU_SUSFS\nextern bool ksu_su_compat_enabled;\nextern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,\n\t\t\tvoid *envp, int *flags);\nextern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr, void *argv,\n\t\t\t\tvoid *envp, int *flags);\n#endif' fs/exec.c
         else
-            sed -i '/^static int do_execveat_common(int fd, struct filename \*filename,/i\#ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_su_compat_enabled;\nextern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,\n\t\t\tvoid *envp, int *flags);\nextern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,\n\t\t\t\t void *argv, void *envp, int *flags);\n#endif\n' fs/exec.c
+            sed -i '/^static int do_execveat_common(int fd, struct filename \*filename,/i\#ifdef CONFIG_KSU_SUSFS\nextern bool ksu_su_compat_enabled;\nextern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,\n\t\t\tvoid *envp, int *flags);\nextern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,\n\t\t\t\t void *argv, void *envp, int *flags);\n#endif\n' fs/exec.c
         fi
-        sed -i '/return PTR_ERR(filename);/a\#ifdef CONFIG_KSU_SUSFS\n\tif (likely(susfs_is_current_proc_no_su()))\n\t\tgoto orig_flow;\n\tif (static_branch_likely(&ksu_su_compat_enabled)) {\n\t\tif (static_branch_unlikely(\&susfs_is_sdcard_android_data_not_decrypted))\n\t\tksu_handle_execveat(\&fd, \&filename, \&argv, \&envp, \&flags);\n\telse\n\t\tksu_handle_execveat_sucompat(\&fd, \&filename, \&argv, \&envp, \&flags);\n\t}\norig_flow:\n#endif' fs/exec.c
+        sed -i '/return PTR_ERR(filename);/a\#ifdef CONFIG_KSU_SUSFS\n\tif (likely(susfs_is_current_proc_no_su()))\n\t\tgoto orig_flow;\n\tif (likely(ksu_su_compat_enabled)) {\n\t\tif (static_branch_unlikely(\&susfs_is_sdcard_android_data_not_decrypted))\n\t\tksu_handle_execveat(\&fd, \&filename, \&argv, \&envp, \&flags);\n\telse\n\t\tksu_handle_execveat_sucompat(\&fd, \&filename, \&argv, \&envp, \&flags);\n\t}\norig_flow:\n#endif' fs/exec.c
 
         if grep -q "ksu_handle_execveat_sucompat" "fs/exec.c"; then
             echo "[+] fs/exec.c Patched!"
@@ -77,21 +77,21 @@ for i in "${patch_files[@]}"; do
 
         if grep -q "do_faccessat" "fs/open.c" >/dev/null 2>&1; then
             if grep -q "static int filename_lookup" "fs/namei.c" ; then
-                sed -i '/long do_faccessat(int dfd, const char __user \*filename, int mode)/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode,\n\t\t\tint *flags);\nextern int filename_lookup(int dfd, struct filename *name, unsigned flags,\n\t\t\t\tstruct path *path, struct path *root);\n#endif' fs/open.c
+                sed -i '/long do_faccessat(int dfd, const char __user \*filename, int mode)/i #ifdef CONFIG_KSU_SUSFS\nextern bool ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode,\n\t\t\tint *flags);\nextern int filename_lookup(int dfd, struct filename *name, unsigned flags,\n\t\t\t\tstruct path *path, struct path *root);\n#endif' fs/open.c
             else
-                sed -i '/long do_faccessat(int dfd, const char __user \*filename, int mode)/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode,\n\t\t\tint *flags);\n#endif' fs/open.c
+                sed -i '/long do_faccessat(int dfd, const char __user \*filename, int mode)/i #ifdef CONFIG_KSU_SUSFS\nextern bool ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode,\n\t\t\tint *flags);\n#endif' fs/open.c
             fi
 
         else
             if grep -q "static int filename_lookup" "fs/namei.c" ; then
-                sed -i '/SYSCALL_DEFINE3(faccessat/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode,\n             int *flags);\nextern int filename_lookup(int dfd, struct filename *name, unsigned flags,\n\t\t\t\tstruct path *path, struct path *root);\n#endif' fs/open.c
+                sed -i '/SYSCALL_DEFINE3(faccessat/i #ifdef CONFIG_KSU_SUSFS\nextern bool ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode,\n             int *flags);\nextern int filename_lookup(int dfd, struct filename *name, unsigned flags,\n\t\t\t\tstruct path *path, struct path *root);\n#endif' fs/open.c
             else
-                sed -i '/SYSCALL_DEFINE3(faccessat/i #ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode,\n             int *flags);\n#endif' fs/open.c
+                sed -i '/SYSCALL_DEFINE3(faccessat/i #ifdef CONFIG_KSU_SUSFS\nextern bool ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode,\n             int *flags);\n#endif' fs/open.c
             fi
 
         fi
         sed -i '/if (mode & ~S_IRWXO)/i\#ifdef CONFIG_KSU_SUSFS\n\tstruct filename *fname = NULL;\n#endif\n' fs/open.c
-        sed -i '/res = user_path_at(dfd, filename, lookup_flags, \&path);/i\#ifdef CONFIG_KSU_SUSFS\n\tfname = getname_flags(filename, lookup_flags, NULL);\n\n\tif (likely(susfs_is_current_proc_no_su()))\n\t\tgoto orig_flow;\n\n\tif (static_branch_likely(\&ksu_su_compat_enabled)) {\n\t\tif (unlikely(__ksu_is_allow_uid_for_current(current_uid().val)))\n\t\t\tksu_handle_faccessat(\&dfd, \&fname, \&mode, NULL);\n\t}\n\norig_flow:\n\tres = filename_lookup(dfd, fname, lookup_flags, \&path, NULL);\n\t\/\/ no putname(fname) here as filename_lookup() has it done for us already;\n#else' fs/open.c
+        sed -i '/res = user_path_at(dfd, filename, lookup_flags, \&path);/i\#ifdef CONFIG_KSU_SUSFS\n\tfname = getname_flags(filename, lookup_flags, NULL);\n\n\tif (likely(susfs_is_current_proc_no_su()))\n\t\tgoto orig_flow;\n\n\tif (likely(ksu_su_compat_enabled)) {\n\t\tif (unlikely(__ksu_is_allow_uid_for_current(current_uid().val)))\n\t\t\tksu_handle_faccessat(\&dfd, \&fname, \&mode, NULL);\n\t}\n\norig_flow:\n\tres = filename_lookup(dfd, fname, lookup_flags, \&path, NULL);\n\t\/\/ no putname(fname) here as filename_lookup() has it done for us already;\n#else' fs/open.c
         sed -i '/res = user_path_at(dfd, filename, lookup_flags, \&path);/a\#endif' fs/open.c
 
         if grep -q "ksu_handle_faccessat" "fs/open.c"; then
@@ -152,16 +152,16 @@ for i in "${patch_files[@]}"; do
 
         if grep -q "vfs_statx" "fs/stat.c"; then
             if grep -q "static int filename_lookup" "fs/namei.c" ; then
-                sed -i '/^int vfs_statx(int dfd, const char __user \*filename, int flags,/i\#ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_stat(int *dfd, struct filename **filename, int *flags);\nextern int filename_lookup(int dfd, struct filename *name, unsigned flags,\n\t\t\t\tstruct path *path, struct path *root);\n#endif\n' fs/stat.c
+                sed -i '/^int vfs_statx(int dfd, const char __user \*filename, int flags,/i\#ifdef CONFIG_KSU_SUSFS\nextern bool ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_stat(int *dfd, struct filename **filename, int *flags);\nextern int filename_lookup(int dfd, struct filename *name, unsigned flags,\n\t\t\t\tstruct path *path, struct path *root);\n#endif\n' fs/stat.c
             else
-                sed -i '/^int vfs_statx(int dfd, const char __user \*filename, int flags,/i\#ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_stat(int *dfd, struct filename **filename, int *flags);\n#endif\n' fs/stat.c
+                sed -i '/^int vfs_statx(int dfd, const char __user \*filename, int flags,/i\#ifdef CONFIG_KSU_SUSFS\nextern bool ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_stat(int *dfd, struct filename **filename, int *flags);\n#endif\n' fs/stat.c
             fi
 
         elif grep -q "vfs_fstatat" "fs/stat.c"; then
             if grep -q "static int filename_lookup" "fs/namei.c" ; then
-                sed -i '/^int vfs_fstatat(int dfd, const char __user \*filename, struct kstat \*stat,/i\#ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_stat(int *dfd, struct filename **filename, int *flags);\n			   struct path *path, struct path *root);\n\t\t\t\tstruct path *path, struct path *root);\n#endif\n' fs/stat.c
+                sed -i '/^int vfs_fstatat(int dfd, const char __user \*filename, struct kstat \*stat,/i\#ifdef CONFIG_KSU_SUSFS\nextern bool ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_stat(int *dfd, struct filename **filename, int *flags);\n			   struct path *path, struct path *root);\n\t\t\t\tstruct path *path, struct path *root);\n#endif\n' fs/stat.c
             else
-                sed -i '/^int vfs_fstatat(int dfd, const char __user \*filename, struct kstat \*stat,/i\#ifdef CONFIG_KSU_SUSFS\nextern struct static_key_true ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_stat(int *dfd, struct filename **filename, int *flags);\n			   struct path *path, struct path *root);\n#endif\n' fs/stat.c
+                sed -i '/^int vfs_fstatat(int dfd, const char __user \*filename, struct kstat \*stat,/i\#ifdef CONFIG_KSU_SUSFS\nextern bool ksu_su_compat_enabled;\nextern bool __ksu_is_allow_uid_for_current(uid_t uid);\nextern int ksu_handle_stat(int *dfd, struct filename **filename, int *flags);\n			   struct path *path, struct path *root);\n#endif\n' fs/stat.c
             fi
 
         else
@@ -169,7 +169,7 @@ for i in "${patch_files[@]}"; do
         fi
 
         sed -i '/if ((flags & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |/i\#ifdef CONFIG_KSU_SUSFS\n\tstruct filename *fname = NULL;\n#endif\n' fs/stat.c
-        sed -i '/error = user_path_at(dfd, filename, lookup_flags, \&path);/i\#ifdef CONFIG_KSU_SUSFS\n\tfname = getname_flags(filename, lookup_flags, NULL);\n\n\tif (likely(susfs_is_current_proc_no_su()))\n\t\tgoto orig_flow;\n\n\tif (static_branch_likely(\&ksu_su_compat_enabled)) {\n\t\tif (unlikely(__ksu_is_allow_uid_for_current(current_uid().val)))\n\t\t\tksu_handle_stat(\&dfd, \&fname, \&flags);\n\t}\n\norig_flow:\n\terror = filename_lookup(dfd, fname, lookup_flags, \&path, NULL);\n\t\/\/ no putname(fname) here as filename_lookup() has it done for us already;\n#else' fs/stat.c
+        sed -i '/error = user_path_at(dfd, filename, lookup_flags, \&path);/i\#ifdef CONFIG_KSU_SUSFS\n\tfname = getname_flags(filename, lookup_flags, NULL);\n\n\tif (likely(susfs_is_current_proc_no_su()))\n\t\tgoto orig_flow;\n\n\tif (likely(ksu_su_compat_enabled)) {\n\t\tif (unlikely(__ksu_is_allow_uid_for_current(current_uid().val)))\n\t\t\tksu_handle_stat(\&dfd, \&fname, \&flags);\n\t}\n\norig_flow:\n\terror = filename_lookup(dfd, fname, lookup_flags, \&path, NULL);\n\t\/\/ no putname(fname) here as filename_lookup() has it done for us already;\n#else' fs/stat.c
         sed -i '/error = user_path_at(dfd, filename, lookup_flags, \&path);/a\#endif' fs/stat.c
         sed -i '/fdput(f);/i\#ifdef CONFIG_KSU_SUSFS\n\t\tif (static_branch_unlikely(\&ksu_is_init_rc_hook_enabled))\n\t\t\tksu_handle_vfs_fstat(fd, \&stat->size);\n#endif \/\/ #ifdef CONFIG_KSU_SUSFS\n' fs/stat.c
 
