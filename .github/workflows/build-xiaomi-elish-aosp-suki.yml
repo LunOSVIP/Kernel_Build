@@ -25,9 +25,12 @@ env:
   # the lowering and keeps the sprintf call (defined in lib/vsprintf.c).
   EXTRA_CMDS : "LLVM=1 KCFLAGS=-fno-builtin-stpcpy"
 
-  # MiCode elish source (QGKI 4.19.113, kona/SM8250)
-  KERNEL_SOURCE : "https://github.com/MiCode/Xiaomi_Kernel_OpenSource.git"
-  KERNEL_BRANCH : "elish-r-oss"
+  # MiCode elish source is QGKI 4.19.113 (Android R) only; the device ships Android 13
+  # (MIUI V816.0.2.0.TKYCNXM) on 4.19.157-perf-gf8cf95f4dc15. Android-R kernel + A13
+  # ramdisk/firmware = boot logo loop. Switch to UtsavBalar1231's CLO rebase
+  # (4.19.268 + AOSP android-4.19-stable) which targets A13/A14 MIUI and keeps elish DT.
+  KERNEL_SOURCE : "https://github.com/UtsavBalar1231/kernel_xiaomi_sm8250.git"
+  KERNEL_BRANCH : "android13-stable"
 
   # LLVM 14.0.6 = QGKI factory (A11/A12) generation toolchain for kona, required by
   # techpack/audio (SND_SOC) + techpack/video (MEDIA). LLVM >= 19 turns their warnings
@@ -46,7 +49,7 @@ env:
   GCC_32_BRANCH : "android12L-release"
 
   DEFCONFIG_SOURCE: ""
-  DEFCONFIG_NAME : "vendor/elish_user_defconfig"
+  DEFCONFIG_NAME : "elish_defconfig"
   DEFCONFIG_ORIGIN_IMAGE: ""
   DEFCONFIG_FROM_BOOT: false
 
