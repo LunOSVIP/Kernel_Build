@@ -176,6 +176,14 @@ jobs:
           #    + gcc -fno-common otherwise define the symbol in both lexer and parser).
           sed -i '/^YYLTYPE yylloc;$/d' ./scripts/dtc/dtc-lexer.l
 
+          # 2) Use clang's integrated assembler instead of the ancient android-4.9 GNU
+          #    as. The 4.19 Makefile force-adds `-no-integrated-as`, which routes every
+          #    .S to the bundled GNU binutils; that old as rejects modern clang-14
+          #    psuedo-ops/standalone `file number less than one` / `junk at end of line`
+          #    (seen in init/do_mounts_rd.o). Strip the flag so arm64 code assembles
+          #    with clang's own integrated assembler (the standard N-GKI/QGKI scheme).
+          sed -i '/-no-integrated-as/d' ./Makefile
+
           # Keep stock toolchain-safe settings for QGKI 4.19 (kona) with modern clang
           echo "CONFIG_LTO_NONE=n" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
           echo "CONFIG_SHADOW_CALL_STACK=n" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
