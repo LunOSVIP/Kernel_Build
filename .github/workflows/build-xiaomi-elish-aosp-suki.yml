@@ -9,8 +9,13 @@ env:
   DEVICE_NAME : "xiaomi_elish"
   DEVICE_CODENAME : "elish"
 
-  CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
-  EXTRA_CMDS : "LLVM=1 LLVM_IAS=1"
+  # NOTE: elish QGKI 4.19 top Makefile hardcodes `CLANG_FLAGS += -no-integrated-as`,
+  # so clang MUST find an external GNU as for --target. The bundled GCC (android-4.9)
+  # is prefixed `aarch64-linux-android-`, so CLANG_TRIPLE MUST match that prefix or
+  # clang falls back to the x86 host `/usr/bin/as` (rejects -EL). LLVM_IAS is a 5.x
+  # var and is ignored by this 4.19 tree, so it cannot be relied on.
+  CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-android-"
+  EXTRA_CMDS : "LLVM=1"
 
   # MiCode elish source (QGKI 4.19.113, kona/SM8250)
   KERNEL_SOURCE : "https://github.com/MiCode/Xiaomi_Kernel_OpenSource.git"
@@ -128,6 +133,12 @@ jobs:
       - name: 🪛 Extra Kernel Options
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
+
+          # Host-tool fixes for this old 4.19 QGKI tree on modern CI runners.
+          # 1) yylloc multiple-definition: upstream stable removed the redundant
+          #    global `YYLTYPE yylloc;` in scripts/dtc/dtc-lexer.l (newer flex/bison
+          #    + gcc -fno-common otherwise define the symbol in both lexer and parser).
+          sed -i '/^YYLTYPE yylloc;$/d' ./scripts/dtc/dtc-lexer.l
 
           # Keep stock toolchain-safe settings for QGKI 4.19 (kona) with modern clang
           echo "CONFIG_LTO_NONE=n" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
