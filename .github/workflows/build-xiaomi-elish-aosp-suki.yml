@@ -19,7 +19,11 @@ env:
   # for hand-written .S rules (see "Extra Kernel Options").
   # LLVM_IAS is a 5.x var and is ignored by this 4.19 tree, so it cannot be relied on.
   CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
-  EXTRA_CMDS : "LLVM=1"
+  # KCFLAGS=-fno-builtin-stpcpy: elish 4.19 has no stpcpy() in lib/string.c, but clang-14
+  # lowers `sprintf(dst,"%s%d",...)` in show_cons_active() to a stpcpy() call, which then
+  # fails at vmlinux link with "undefined reference to stpcpy". Disabling the builtin stops
+  # the lowering and keeps the sprintf call (defined in lib/vsprintf.c).
+  EXTRA_CMDS : "LLVM=1 KCFLAGS=-fno-builtin-stpcpy"
 
   # MiCode elish source (QGKI 4.19.113, kona/SM8250)
   KERNEL_SOURCE : "https://github.com/MiCode/Xiaomi_Kernel_OpenSource.git"
