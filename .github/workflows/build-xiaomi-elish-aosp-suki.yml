@@ -13,7 +13,10 @@ env:
   # so clang MUST find an external GNU as for --target. Keep CLANG_TRIPLE as the
   # GNU triple (an android triple is rejected by scripts/clang-android.sh -> __ANDROID__).
   # The bundled android-4.9 gcc is prefixed aarch64-linux-android-, so we create
-  # aarch64-linux-gnu-* symlinks in a step below so clang --prefix finds the GNU as.
+  # aarch64-linux-gnu-* symlinks in a step below and put gcc-64/bin on PATH (see
+  # build-process) so `which $(CROSS_COMPILE)elfedit` resolves and clang --prefix finds
+  # the GNU as. The -no-integrated-as flag itself is dropped globally and re-added only
+  # for hand-written .S rules (see "Extra Kernel Options").
   # LLVM_IAS is a 5.x var and is ignored by this 4.19 tree, so it cannot be relied on.
   CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
   EXTRA_CMDS : "LLVM=1"
@@ -176,13 +179,21 @@ jobs:
           #    + gcc -fno-common otherwise define the symbol in both lexer and parser).
           sed -i '/^YYLTYPE yylloc;$/d' ./scripts/dtc/dtc-lexer.l
 
-          # 2) Use clang's integrated assembler instead of the ancient android-4.9 GNU
-          #    as. The 4.19 Makefile force-adds `-no-integrated-as`, which routes every
-          #    .S to the bundled GNU binutils; that old as rejects modern clang-14
-          #    psuedo-ops/standalone `file number less than one` / `junk at end of line`
-          #    (seen in init/do_mounts_rd.o). Strip the flag so arm64 code assembles
-          #    with clang's own integrated assembler (the standard N-GKI/QGKI scheme).
+          # 2) Split the assembler usage, because neither assembler works for everything:
+          #    - The top Makefile force-adds `-no-integrated-as`, which routes EVERY .o to
+          #      the bundled android-4.9 GNU as. That as (binutils 2.25) cannot parse
+          #      clang-14 generated assembly (`file number less than one`,
+          #      `junk at end of line` in init/do_mounts_rd.o) -> drop it globally so all
+          #      clang-emitted .s uses clang's own integrated assembler (N-GKI/QGKI scheme).
           sed -i '/-no-integrated-as/d' ./Makefile
+          #    - Hand-written .S files, however, use GNU-as-only syntax that llvm-mc
+          #      rejects, e.g. arch/arm64/kernel/vdso/note.S (`BUILD_SALT` expands to
+          #      ELFNOTE with empty section flags -> "changed section flags for
+          #      .note.Linux, expected: 0x2") and `clock_gettime_return, shift=1`
+          #      ("too many positional arguments"). Re-add `-no-integrated-as` for the
+          #      .S -> .o rules only, so the vDSO stays byte-identical to the factory build.
+          sed -i '/^cmd_as_o_S = /s|\$(CC)|$(CC) -no-integrated-as|' ./scripts/Makefile.build
+          sed -i '/^ *cmd_vdsoas = /s|\$(CC)|$(CC) -no-integrated-as|' ./arch/arm64/kernel/vdso/Makefile
 
           # Keep stock toolchain-safe settings for QGKI 4.19 (kona) with modern clang
           echo "CONFIG_LTO_NONE=n" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
