@@ -48,6 +48,18 @@ runs:
             export PATH=$GITHUB_WORKSPACE/clang-custom/bin:$PATH
           fi
 
+          # The 4.19 kernel Makefile resolves the external GNU assembler/linker via
+          # `which $(CROSS_COMPILE)elfedit` and clang --prefix/--gcc-toolchain, all of
+          # which depend on the cross-toolchain bin dir being on PATH. bundle GCC bin
+          # dirs so clang finds the (GNU-symlinked) assembler instead of the x86 host
+          # /usr/bin/as (which rejects -EL on arm64).
+          for _gcctool in gcc-64 gcc-32; do
+            _bin="$GITHUB_WORKSPACE/$_gcctool/bin"
+            if [ -d "$_bin" ]; then
+              export PATH="$_bin:$PATH"
+            fi
+          done
+
           if [[ "$BUILD_CLANG" == "true" ]]; then
             echo "========================"
             echo "=Read Defconfig (Clang)="
