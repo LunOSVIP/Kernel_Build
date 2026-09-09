@@ -255,11 +255,11 @@ runs:
 
           if [[ "${{ env.KERNELSU_SOURCE }}" == *SukiSU* ]] || [[ "${{ env.KERNELSU_AUTO_FORK }}" == "sukisu" ]]; then
             cp /tmp/Patches/Patch/sukisu_ultra_fixed.patch ./
-            # SukiSU-Ultra 'builtin' branch already carries some of these fixes (e.g.
-            # runtime/ksud.c), so full application can hit 'reversed / already applied'
-            # hunks that produce *.rej and a non-zero exit under set -e. Apply tolerantly:
-            # the only reject we accept is the already-applied runtime/ksud.c hunk;
-            # any other reject is a real failure and aborts the build.
+            # Upstream 'builtin' branch does not match the context this patch was
+            # written against, so the runtime/ksud.c hunk always rejects (rc=1 plus
+            # a *.rej file) while every other hunk applies cleanly. Apply tolerantly:
+            # a reject anywhere except runtime/ksud.c is a real failure and aborts.
+            # The intent of the ksud.c hunk is re-applied deterministically below.
             set +e
             patch --forward --batch -p1 < sukisu_ultra_fixed.patch
             rc=$?
@@ -270,6 +270,41 @@ runs:
                 exit 1
             fi
             rm -f runtime/ksud.c.rej
+            # SukiSU-Ultra 'builtin' branch is self-inconsistent on kernels < 5.10
+            # (verified against upstream commit v4.2.0-e2912817):
+            #   1) feature/kernel_umount.c wires .set_handler to
+            #      kernel_umount_feature_set(), which is never defined anywhere.
+            #   2) runtime/ksud.c calls ksu_selinux_hide_handle_{second_stage,
+            #      post_fs_data}() unconditionally, while ksu.c only includes
+            #      feature/selinux_hide.h for LINUX_VERSION_CODE >= 5.10, and the
+            #      upstream fix hunk for that file rejects (context differs).
+            # Repair both deterministically; each guard makes the edit idempotent
+            # and harmless for >= 5.10 kernels.
+            if ! grep -q 'kernel_umount_feature_set(u64' feature/kernel_umount.c; then
+                sed -i 's@^static const struct ksu_feature_handler kernel_umount_handler = {@static int kernel_umount_feature_set(u64 value)\n{\n    ksu_kernel_umount_enabled = value != 0;\n    return 0;\n}\n\nstatic const struct ksu_feature_handler kernel_umount_handler = {@' feature/kernel_umount.c
+                grep -q 'kernel_umount_feature_set(u64' feature/kernel_umount.c || {
+                    echo "[-] failed to define kernel_umount_feature_set()."
+                    exit 1
+                }
+                echo "[+] Defined missing kernel_umount_feature_set()."
+            fi
+            # Any ksu_selinux_hide_handle_*() call whose previous line is not already a
+            # '>= 5.10' condition; awk is used because grep cannot look behind reliably.
+            UNGUARDED(){
+                awk '{ if ($0 ~ /^[ \t]*ksu_selinux_hide_handle_[a-z_]+\(\);/ && prev !~ /LINUX_VERSION_CODE >= KERNEL_VERSION\(5, 10, 0\)/) print NR
+                       prev = $0 }' runtime/ksud.c
+            }
+            missing=$(UNGUARDED)
+            if [ -n "$missing" ]; then
+                echo "[!] ksu_selinux_hide_handle_*() calls need guarding at lines: $missing"
+                sed -i -E 's@^[[:space:]]*ksu_selinux_hide_handle_[a-z_]+\(\);@#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)\n&\n#endif@' runtime/ksud.c
+                left=$(UNGUARDED)
+                [ -z "$left" ] || {
+                    echo "[-] failed to guard ksu_selinux_hide_handle_*() calls, still unguarded at: $left"
+                    exit 1
+                }
+                echo "[+] Guarded ksu_selinux_hide_handle_*() calls with the same >= 5.10 condition ksu.c uses."
+            fi
             echo "[+] SukiSU-Ultra mitigation measures implemented (patch rc=$rc)."
             set -e
 
