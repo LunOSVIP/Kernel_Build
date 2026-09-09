@@ -16,11 +16,12 @@ env:
   KERNEL_SOURCE : "https://github.com/MiCode/Xiaomi_Kernel_OpenSource.git"
   KERNEL_BRANCH : "elish-r-oss"
 
-  # clang 14.0.6: matches the QGKI kona (SM8250, A11/A12) era.
-  # Critical: elish enables techpack/audio (SND_SOC) + techpack/video (MEDIA).
-  # Newer clang (19) turns techpack's extra warnings into -Werror build failures,
-  # so we pin the era-matched clang for a reliable one-shot build.
-  CLANG_SOURCE : "https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/LLVM-14.0.6-Linux-X64.tar.xz"
+  # clang 19.1.7: same toolchain as the proven-stable 4.19 template (mix2s).
+  # The llvmorg-14.0.6 asset now returns HTTP 404 from GitHub, so it cannot be used.
+  # elish enables techpack/audio (SND_SOC) + techpack/video (MEDIA); if clang 19
+  # turns their warnings into -Werror errors, see the build step fatal log and the
+  # EXTRA Options override already set (LTO_NONE / SHADOW_CALL_STACK / RELR off).
+  CLANG_SOURCE : "https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-Linux-X64.tar.xz"
   CLANG_BRANCH : ""
 
   # QGKI needs the Android-4.9 GNU GCC for CROSS_COMPILE (VDSO / host tools)
