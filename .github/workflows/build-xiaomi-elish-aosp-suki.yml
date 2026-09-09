@@ -10,11 +10,12 @@ env:
   DEVICE_CODENAME : "elish"
 
   # NOTE: elish QGKI 4.19 top Makefile hardcodes `CLANG_FLAGS += -no-integrated-as`,
-  # so clang MUST find an external GNU as for --target. The bundled GCC (android-4.9)
-  # is prefixed `aarch64-linux-android-`, so CLANG_TRIPLE MUST match that prefix or
-  # clang falls back to the x86 host `/usr/bin/as` (rejects -EL). LLVM_IAS is a 5.x
-  # var and is ignored by this 4.19 tree, so it cannot be relied on.
-  CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-android-"
+  # so clang MUST find an external GNU as for --target. Keep CLANG_TRIPLE as the
+  # GNU triple (an android triple is rejected by scripts/clang-android.sh -> __ANDROID__).
+  # The bundled android-4.9 gcc is prefixed aarch64-linux-android-, so we create
+  # aarch64-linux-gnu-* symlinks in a step below so clang --prefix finds the GNU as.
+  # LLVM_IAS is a 5.x var and is ignored by this 4.19 tree, so it cannot be relied on.
+  CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
   EXTRA_CMDS : "LLVM=1"
 
   # MiCode elish source (QGKI 4.19.113, kona/SM8250)
@@ -123,6 +124,27 @@ jobs:
 
       - name: ⚙️ Get neccssary tools
         uses: ./.github/workflows/build-ready
+
+      - name: 🔗 Add GNU-prefix as symlinks (clang external as)
+        shell: bash
+        run: |
+          # The 4.19 elish Makefile forces `-no-integrated-as`, so clang locates the
+          # external assembler as $(prefix)$(CLANG_TRIPLE)as, i.e. aarch64-linux-gnu-as.
+          # The bundled android-4.9 gcc only ships aarch64-linux-android-* names, so
+          # add GNU-named symlinks (incl. as/elfedit which the Makefile probes) so clang
+          # --prefix resolves them instead of falling back to the x86 host /usr/bin/as.
+          BIN=$(find $GITHUB_WORKSPACE/gcc-64 -maxdepth 2 -type d -name bin | head -n1)
+          if [ -z "$BIN" ] || [ ! -d "$BIN" ]; then
+            echo "[-] gcc-64/bin not found; cannot add GNU symlinks"
+            exit 1
+          fi
+          echo "[+] gcc-64 bin dir: $BIN"
+          for t in ar as ld nm objcopy objdump readelf strip gcov gprof size strings elfedit ld.bfd ld.gold; do
+            if [ -f "$BIN/aarch64-linux-android-$t" ] && [ ! -e "$BIN/aarch64-linux-gnu-$t" ]; then
+              ln -sf "aarch64-linux-android-$t" "$BIN/aarch64-linux-gnu-$t"
+            fi
+          done
+          ls -l "$BIN"/aarch64-linux-gnu-* 2>&1 | sed 's/^/  /' | head -40
 
       - name: 🪝 Patch Kernel of SUSFS
         uses: ./.github/workflows/patch-susfs
