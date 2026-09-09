@@ -195,6 +195,31 @@ jobs:
           sed -i '/^cmd_as_o_S = /s|\$(CC)|$(CC) -no-integrated-as|' ./scripts/Makefile.build
           sed -i '/^ *cmd_vdsoas = /s|\$(CC)|$(CC) -no-integrated-as|' ./arch/arm64/kernel/vdso/Makefile
 
+          # 3) Some vendor subsystems force their own *bare* `-Werror` (e.g.
+          #    drivers/vservices/Makefile line 1 `ccflags-y += -Werror`). Xiaomi shipped
+          #    elish with clang-8, which had no -Wunused-but-set-variable at all, so those
+          #    drivers are clean on the factory toolchain but fatal here:
+          #      drivers/vservices/session.c:1907: error: variable 'transport' set but not
+          #      used [-Werror,-Wunused-but-set-variable]
+          #    Downgrade only the bare flag; keep every targeted `-Werror=<name>` (implicit-int,
+          #    strict-prototypes, incompatible-pointer-types, date-time, designated-init, ...)
+          #    so real miscompilation-level bugs stay fatal.
+          werror_files(){
+            grep -rlE '(^|[[:space:]])-Werror([[:space:]]|$)' --include=Makefile --include=Kbuild .
+          }
+          n_before=$(werror_files | wc -l)
+          # The loop (tag a + ta) is required because the trailing whitespace is part of the
+          # match, so a plain /g would skip an adjacent second '-Werror -Werror' occurrence.
+          find . \( -name Makefile -o -name Kbuild \) -type f -print0 |
+            xargs -0 -r sed -i -E ':a; s/(^|[[:space:]])-Werror([[:space:]]|$)/\1-Wno-error\2/; ta'
+          n_after=$(werror_files | wc -l || true)
+          echo "[+] bare -Werror downgraded in $n_before build file(s), $n_after remain."
+          if [ "$n_after" != "0" ]; then
+            echo "[-] unresolved bare -Werror occurrences:"
+            grep -rnE '(^|[[:space:]])-Werror([[:space:]]|$)' --include=Makefile --include=Kbuild . | head -10
+            exit 1
+          fi
+
           # Keep stock toolchain-safe settings for QGKI 4.19 (kona) with modern clang
           echo "CONFIG_LTO_NONE=n" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
           echo "CONFIG_SHADOW_CALL_STACK=n" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
