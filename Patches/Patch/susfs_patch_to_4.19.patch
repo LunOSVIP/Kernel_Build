@@ -824,7 +824,7 @@ diff --git a/fs/notify/fdinfo.c b/fs/notify/fdinfo.c
  
  #include "inotify/inotify.h"
  #include "fsnotify.h"
-@@ -21,9 +27,16 @@
+@@ -21,16 +27,27 @@
  
  #if defined(CONFIG_INOTIFY_USER) || defined(CONFIG_FANOTIFY)
  
@@ -841,6 +841,17 @@ diff --git a/fs/notify/fdinfo.c b/fs/notify/fdinfo.c
  {
  	struct fsnotify_group *group = f->private_data;
  	struct fsnotify_mark *mark;
+ 
+ 	mutex_lock(&group->mark_mutex);
+ 	list_for_each_entry(mark, &group->marks_list, g_list) {
++#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
++		show(m, mark, f);
++#else
+ 		show(m, mark);
++#endif
+ 		if (seq_has_overflowed(m))
+ 			break;
+ 	}
 @@ -72,10 +85,17 @@
  
  #ifdef CONFIG_INOTIFY_USER
