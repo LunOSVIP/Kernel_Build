@@ -7,6 +7,7 @@ on:
 env:
   DEVICE_NAME : "xiaomi_elish"
   DEVICE_CODENAME : "elish"
+  PYTHON_VERSION : "3"
 
   CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
   EXTRA_CMDS : "LLVM=1 KCFLAGS=-fno-builtin-stpcpy"
