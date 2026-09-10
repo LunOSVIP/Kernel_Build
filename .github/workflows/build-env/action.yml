@@ -128,14 +128,41 @@ runs:
             echo "::endgroup::"
             echo "[+] Coccinelle is installed."
 
-            # Get MKDTBO tool to System
-            mkdir $GITHUB_WORKSPACE/mkdtbo
+            # Get MKDTBO tool to System (best-effort: only required when DTBO is generated)
+            mkdir -p $GITHUB_WORKSPACE/mkdtbo
             cd $GITHUB_WORKSPACE/mkdtbo
-            ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/refs/heads/main/utils/src.tar.gz src.tar.gz
-            tar zxvf src.tar.gz
-            rm -f src.tar.gz
-            ln -s mkdtboimg.py /usr/bin/mkdtboimg
-            ln -s mkdtboimg.py /usr/bin/mkdtimg
+            extract_mkdtbo() {
+                local archive
+                for archive in "$@"; do
+                    if [ -f "$archive" ] && tar tzf "$archive" >/dev/null 2>&1; then
+                        tar xzf "$archive"
+                        rm -f "$archive"
+                        return 0
+                    fi
+                    rm -f "$archive"
+                done
+                return 1
+            }
+            fetch_mkdtbo() {
+                ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/refs/heads/main/utils/src.tar.gz src.tar.gz || echo "[!] mkdtbo primary mirror failed"
+                if extract_mkdtbo src.tar.gz; then
+                    return 0
+                fi
+                ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/master/utils.tar.gz utils.tar.gz || echo "[!] mkdtbo secondary mirror failed"
+                if extract_mkdtbo utils.tar.gz; then
+                    return 0
+                fi
+                return 1
+            }
+            if fetch_mkdtbo && [ -f mkdtboimg.py ]; then
+                chmod +x mkdtboimg.py
+                ln -sf $GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py /usr/bin/mkdtboimg
+                ln -sf $GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py /usr/bin/mkdtimg
+                echo "[+] mkdtboimg is ready."
+            else
+                rm -f src.tar.gz utils.tar.gz
+                echo "[!] mkdtboimg unavailable - skipped (only needed when DTBO is generated)"
+            fi
             cd $GITHUB_WORKSPACE
 
             if [ "${{ env.PYTHON_VERSION }}" == "3" ]; then
@@ -178,14 +205,41 @@ runs:
             echo "::endgroup::"
             echo "[+] Coccinelle is installed."
 
-            # Get MKDTBO tool to System
-            mkdir $GITHUB_WORKSPACE/mkdtbo
+            # Get MKDTBO tool to System (best-effort: only required when DTBO is generated)
+            mkdir -p $GITHUB_WORKSPACE/mkdtbo
             cd $GITHUB_WORKSPACE/mkdtbo
-            ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/refs/heads/main/utils/src.tar.gz src.tar.gz
-            tar zxvf src.tar.gz
-            rm -f src.tar.gz
-            sudo ln -s mkdtboimg.py /usr/bin/mkdtboimg
-            sudo ln -s mkdtboimg.py /usr/bin/mkdtimg
+            extract_mkdtbo() {
+                local archive
+                for archive in "$@"; do
+                    if [ -f "$archive" ] && tar tzf "$archive" >/dev/null 2>&1; then
+                        tar xzf "$archive"
+                        rm -f "$archive"
+                        return 0
+                    fi
+                    rm -f "$archive"
+                done
+                return 1
+            }
+            fetch_mkdtbo() {
+                ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/refs/heads/main/utils/src.tar.gz src.tar.gz || echo "[!] mkdtbo primary mirror failed"
+                if extract_mkdtbo src.tar.gz; then
+                    return 0
+                fi
+                ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/master/utils.tar.gz utils.tar.gz || echo "[!] mkdtbo secondary mirror failed"
+                if extract_mkdtbo utils.tar.gz; then
+                    return 0
+                fi
+                return 1
+            }
+            if fetch_mkdtbo && [ -f mkdtboimg.py ]; then
+                chmod +x mkdtboimg.py
+                sudo ln -sf $GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py /usr/bin/mkdtboimg
+                sudo ln -sf $GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py /usr/bin/mkdtimg
+                echo "[+] mkdtboimg is ready."
+            else
+                rm -f src.tar.gz utils.tar.gz
+                echo "[!] mkdtboimg unavailable - skipped (only needed when DTBO is generated)"
+            fi
             cd $GITHUB_WORKSPACE
 
             if [ "${{ env.PYTHON_VERSION }}" == "3" ]; then
@@ -232,14 +286,41 @@ runs:
             sudo apt install ./libtinfo5.deb
             rm -f libtinfo5.deb
 
-            # Get MKDTBO tool to System
-            mkdir $GITHUB_WORKSPACE/mkdtbo
+            # Get MKDTBO tool to System (best-effort: only required when DTBO is generated)
+            mkdir -p $GITHUB_WORKSPACE/mkdtbo
             cd $GITHUB_WORKSPACE/mkdtbo
-            ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/refs/heads/main/utils/src.tar.gz src.tar.gz
-            tar zxvf src.tar.gz
-            rm -f src.tar.gz
-            sudo ln -s mkdtboimg.py /usr/bin/mkdtboimg
-            sudo ln -s mkdtboimg.py /usr/bin/mkdtimg
+            extract_mkdtbo() {
+                local archive
+                for archive in "$@"; do
+                    if [ -f "$archive" ] && tar tzf "$archive" >/dev/null 2>&1; then
+                        tar xzf "$archive"
+                        rm -f "$archive"
+                        return 0
+                    fi
+                    rm -f "$archive"
+                done
+                return 1
+            }
+            fetch_mkdtbo() {
+                ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/refs/heads/main/utils/src.tar.gz src.tar.gz || echo "[!] mkdtbo primary mirror failed"
+                if extract_mkdtbo src.tar.gz; then
+                    return 0
+                fi
+                ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/master/utils.tar.gz utils.tar.gz || echo "[!] mkdtbo secondary mirror failed"
+                if extract_mkdtbo utils.tar.gz; then
+                    return 0
+                fi
+                return 1
+            }
+            if fetch_mkdtbo && [ -f mkdtboimg.py ]; then
+                chmod +x mkdtboimg.py
+                sudo ln -sf $GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py /usr/bin/mkdtboimg
+                sudo ln -sf $GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py /usr/bin/mkdtimg
+                echo "[+] mkdtboimg is ready."
+            else
+                rm -f src.tar.gz utils.tar.gz
+                echo "[!] mkdtboimg unavailable - skipped (only needed when DTBO is generated)"
+            fi
             cd $GITHUB_WORKSPACE
 
             if [ "${{ env.PYTHON_VERSION }}" == "3" ]; then
@@ -287,14 +368,41 @@ runs:
             echo "::endgroup::"
             echo "[+] Coccinelle is installed."
 
-            # Get MKDTBO tool to System
-            mkdir $GITHUB_WORKSPACE/mkdtbo
+            # Get MKDTBO tool to System (best-effort: only required when DTBO is generated)
+            mkdir -p $GITHUB_WORKSPACE/mkdtbo
             cd $GITHUB_WORKSPACE/mkdtbo
-            ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/refs/heads/main/utils/src.tar.gz src.tar.gz
-            tar zxvf src.tar.gz
-            rm -f src.tar.gz
-            ln -s mkdtboimg.py /usr/bin/mkdtboimg
-            ln -s mkdtboimg.py /usr/bin/mkdtimg
+            extract_mkdtbo() {
+                local archive
+                for archive in "$@"; do
+                    if [ -f "$archive" ] && tar tzf "$archive" >/dev/null 2>&1; then
+                        tar xzf "$archive"
+                        rm -f "$archive"
+                        return 0
+                    fi
+                    rm -f "$archive"
+                done
+                return 1
+            }
+            fetch_mkdtbo() {
+                ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/refs/heads/main/utils/src.tar.gz src.tar.gz || echo "[!] mkdtbo primary mirror failed"
+                if extract_mkdtbo src.tar.gz; then
+                    return 0
+                fi
+                ${{ env.CURLX }} https://android.googlesource.com/platform/system/libufdt/+archive/master/utils.tar.gz utils.tar.gz || echo "[!] mkdtbo secondary mirror failed"
+                if extract_mkdtbo utils.tar.gz; then
+                    return 0
+                fi
+                return 1
+            }
+            if fetch_mkdtbo && [ -f mkdtboimg.py ]; then
+                chmod +x mkdtboimg.py
+                ln -sf $GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py /usr/bin/mkdtboimg
+                ln -sf $GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py /usr/bin/mkdtimg
+                echo "[+] mkdtboimg is ready."
+            else
+                rm -f src.tar.gz utils.tar.gz
+                echo "[!] mkdtboimg unavailable - skipped (only needed when DTBO is generated)"
+            fi
             cd $GITHUB_WORKSPACE
 
             if [ "${{ env.PYTHON_VERSION }}" == "3" ]; then
