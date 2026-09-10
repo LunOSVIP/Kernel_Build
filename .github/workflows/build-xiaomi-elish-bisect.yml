@@ -1,0 +1,229 @@
+name: Bisect Xiaomi Pad 5 Pro WiFi (elish) — Plain Source (no KSU, no SUSFS)
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  # Device env
+  DEVICE_NAME : "xiaomi_elish"
+  DEVICE_CODENAME : "elish"
+
+  CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
+  # Bisect: GNU ld 2.27 (drop LLVM=1) — same as stock linker, isolate source/compiler only.
+  EXTRA_CMDS : "KCFLAGS=-fno-builtin-stpcpy"
+
+  # UtsavBalar1231 CLO rebase — A13/A14 MIUI elish DT
+  KERNEL_SOURCE : "https://github.com/UtsavBalar1231/kernel_xiaomi_sm8250.git"
+  KERNEL_BRANCH : "android13-stable"
+
+  # Same clang 14.0.6 as stock QGKI for A11/A12 kona
+  CLANG_SOURCE : "https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang%2Bllvm-14.0.6-x86_64-linux-gnu-rhel-8.4.tar.xz"
+  CLANG_BRANCH : ""
+
+  # QGKI Android-4.9 GNU GCC for CROSS_COMPILE (VDSO / host tools)
+  GCC_GNU : false
+  GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH : "android12L-release"
+  GCC_32_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
+  GCC_32_BRANCH : "android12L-release"
+
+  DEFCONFIG_SOURCE: ""
+  DEFCONFIG_NAME : "elish_defconfig"
+  DEFCONFIG_ORIGIN_IMAGE: ""
+  DEFCONFIG_FROM_BOOT: false
+
+  # === BISECT: ALL KSU/SUSFS DISABLED ===
+  KERNELSU_SOURCE : ""
+  KERNELSU_BRANCH : ""
+  KERNELSU_AUTO_GET : "false"
+  KERNELSU_AUTO_FORK : ""
+  SUSFS_ENABLE : false
+  SUSFS_FIXED : false
+
+  # AnyKernel3 pack (keeps current dtbo/ramdisk)
+  AK3_SOURCE : "https://github.com/osm0sis/AnyKernel3.git"
+  AK3_BRANCH : "master"
+
+  BOOT_SOURCE : ""
+  NEED_DTBO : false
+  NEED_SAFE_DTBO : false
+
+  ROM_TEXT : "plain_bisect"
+
+  # Other env
+  PYTHON_VERSION: "3"
+  PACK_METHOD: "Anykernel3"
+  PACK_KMODULES: "false"
+  KERNELSU_METHOD: "shell"
+
+  PATCHES_SOURCE: ""
+  PATCHES_BRANCH: ""
+
+  SUSFS_FOLDER_FIXED: ""
+  SUSFS_PATCH_FIXED: ""
+
+  REKERNEL_ENABLE: "false"
+  DROIDSPACES_ENABLE: "false"
+  NOMOUNT_ENABLE: "false"
+
+  HOOK_METHOD: "syscall"
+
+  KERNEL_PATCH: "false"
+
+  KPM_ENABLE: "false"
+  KPM_INLINE: "false"
+  KPM_KPATCH_NEXT: "false"
+  KPM_PATCH_SOURCE: ""
+
+  BASEBAND_GUARD_ENABLE: "false"
+  BASEBAND_GUARD_BOOT: "false"
+
+  GENERATE_DTB: "false"
+  GENERATE_CHIP: "qcom"
+
+  BUILD_DEBUGGER: "false"
+  SKIP_PATCH: "false"
+
+  BUILD_OTHER_CONFIG: "false"
+  MERGE_CONFIG_FILES: ""
+
+  FREE_MORE_SPACE: "false"
+
+jobs:
+  build-kernel:
+    name: Xiaomi Pad 5 Pro WiFi (elish) PLAIN — no KSU, no SUSFS
+    runs-on: ubuntu-22.04
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
+
+    steps:
+      - name: ⏰ Checkout repository
+        uses: actions/checkout@v6
+
+      - name: ⌛️ Compilation environment preparation
+        uses: ./.github/workflows/build-env
+
+      # === Plain build: ONLY the safe subset of build-ready ===
+      # We skip build-ready entirely because it unconditionally:
+      #   - clones KernelSU / writes CONFIG_KSU=y / runs clean_hook.sh / applies SUSFS patches
+      # Instead we inline just: kernel clone, arch detect, AK3 clone.
+
+      - name: "📦 Clone kernel source"
+        shell: bash
+        run: |
+          cd $GITHUB_WORKSPACE
+          echo "::group::[+] git clone kernel source..."
+          git clone --recursive "${{ env.KERNEL_SOURCE }}" -b "${{ env.KERNEL_BRANCH }}" device_kernel --depth=1
+          if [[ -f "device_kernel/.gitmodules" ]]; then
+            cd device_kernel && git submodule init && git submodule update && cd ../
+            echo "[+] Detected GitModules."
+          fi
+          echo "::endgroup::"
+          echo "[+] Kernel source cloned."
+
+          KERNEL_VERSION=$(head -n 3 device_kernel/Makefile | grep -E 'VERSION|PATCHLEVEL' | awk '{print $3}' | paste -sd '.')
+          echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
+          echo "FIRST_VERSION=$(echo "$KERNEL_VERSION" | awk -F '.' '{print $1}')" >> $GITHUB_ENV
+          echo "SECOND_VERSION=$(echo "$KERNEL_VERSION" | awk -F '.' '{print $2}')" >> $GITHUB_ENV
+
+      - name: "⚙️ Detect kernel arch"
+        shell: bash
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          if [[ -d "arch/arm64/configs" ]]; then
+            echo "KERNEL_ARCH=arm64" >> $GITHUB_ENV
+          else
+            echo "[-] Non-ARM64 not supported!"
+            exit 1
+          fi
+
+      - name: "📦 Clone AnyKernel3"
+        shell: bash
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          git clone "${{ env.AK3_SOURCE }}" -b "${{ env.AK3_BRANCH }}" Anykernel3
+          cd Anykernel3
+          git checkout dca9dc370838d919d56c1f59ec78b27a14a72c68
+          cd ../
+          echo "PACK_METHOD=${{ env.PACK_METHOD }}" >> $GITHUB_ENV
+          echo "[+] AnyKernel3 ready."
+
+      - name: 🔗 Add GNU-prefix as symlinks (clang external as)
+        shell: bash
+        run: |
+          BIN="$GITHUB_WORKSPACE/gcc-64/bin"
+          if [ ! -d "$BIN" ]; then
+            echo "[-] gcc-64 bin dir not found: $BIN"
+            find $GITHUB_WORKSPACE/gcc-64 -maxdepth 4 -type d | sed 's/^/  DIR: /' | head -40
+            exit 1
+          fi
+          echo "[+] gcc-64 bin dir: $BIN"
+          shopt -s nullglob
+          for f in "$BIN"/aarch64-linux-android-*; do
+            [ -e "$f" ] || continue
+            base=$(basename "$f")
+            gnu=${base/aarch64-linux-android-/aarch64-linux-gnu-}
+            if [ "$gnu" != "$base" ] && [ ! -e "$BIN/$gnu" ]; then
+              ln -sf "$base" "$BIN/$gnu"
+              echo "  + $gnu -> $base"
+            fi
+          done
+          for t in as elfedit ld; do
+            if [ ! -e "$BIN/aarch64-linux-gnu-$t" ]; then
+              echo "  [-] missing aarch64-linux-gnu-$t"
+            fi
+          done
+          echo "[done] GNU-prefix symlinks ready"
+
+      # NO patch-susfs, NO patch-no-kprobe, NO patch-rekernel, NO patch-droidspaces, NO patch-baseband-guard
+
+      - name: 🪛 Extra Kernel Options
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+
+          # 1) yylloc multiple-definition fix
+          sed -i '/^YYLTYPE yylloc;$/d' ./scripts/dtc/dtc-lexer.l
+
+          # 2) Drop global -no-integrated-as, re-add for hand-written .S rules only
+          sed -i '/-no-integrated-as/d' ./Makefile
+          sed -i '/^cmd_as_o_S = /s|\$(CC)|$(CC) -no-integrated-as|' ./scripts/Makefile.build
+          sed -i '/^ *cmd_vdsoas = /s|\$(CC)|$(CC) -no-integrated-as|' ./arch/arm64/kernel/vdso/Makefile
+
+          # 3) Downgrade bare -Werror to -Wno-error (keep targeted -Werror=<name>)
+          werror_files(){
+            grep -rlE '(^|[[:space:]])-Werror([[:space:]]|$)' --include=Makefile --include=Kbuild .
+          }
+          n_before=$(werror_files | wc -l)
+          find . \( -name Makefile -o -name Kbuild \) -type f -print0 |
+            xargs -0 -r sed -i -E ':a; s/(^|[[:space:]])-Werror([[:space:]]|$)/\1-Wno-error\2/; ta'
+          n_after=$(werror_files | wc -l || true)
+          echo "[+] bare -Werror downgraded in $n_before build file(s), $n_after remain."
+          if [ "$n_after" != "0" ]; then
+            echo "[-] unresolved bare -Werror occurrences:"
+            grep -rnE '(^|[[:space:]])-Werror([[:space:]]|$)' --include=Makefile --include=Kbuild . | head -10
+            exit 1
+          fi
+
+          # QGKI 4.19 kona toolchain-safe configs
+          echo "CONFIG_LTO_NONE=n" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_SHADOW_CALL_STACK=n" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_RELR=n" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+
+          # EROFS support
+          echo "CONFIG_EROFS_FS=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_EROFS_FS_ZIP=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_EROFS_FS_XATTR=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_EROFS_FS_POSIX_ACL=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_EROFS_FS_SECURITY=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+
+      - name: 🚀 Build Process
+        uses: ./.github/workflows/build-process
+
+      - name: 🔩 Pack Process
+        uses: ./.github/workflows/pack-process
+
+      - name: ✏️ Upload Artifacts
+        uses: ./.github/workflows/upload-files
