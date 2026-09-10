@@ -1,0 +1,114 @@
+name: Build Elish Kernel with SukiSU Ultra + SUSFS
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  DEVICE_NAME : "xiaomi_elish"
+  DEVICE_CODENAME : "elish"
+
+  CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
+  EXTRA_CMDS : "LLVM=1 KCFLAGS=-fno-builtin-stpcpy"
+
+  # Use official Xiaomi elish kernel source (4.19.113)
+  KERNEL_SOURCE : "https://github.com/MiCode/Xiaomi_Kernel_OpenSource.git"
+  KERNEL_BRANCH : "elish-r-oss"
+
+  CLANG_SOURCE : "https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang%2Bllvm-14.0.6-x86_64-linux-gnu-rhel-8.4.tar.xz"
+  CLANG_BRANCH : ""
+
+  GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH : "android12L-release"
+  GCC_32_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
+  GCC_32_BRANCH : "android12L-release"
+
+  DEFCONFIG_NAME : "elish_user_defconfig"
+  PACK_METHOD : "Anykernel3"
+  KERNELSU_AUTO_GET : "true"
+  KERNELSU_AUTO_FORK : "sukisu"
+  KERNELSU_METHOD : "shell"
+
+  SUSFS_ENABLE : true
+  SUSFS_FIXED : true
+
+  AK3_SOURCE : "https://github.com/osm0sis/AnyKernel3.git"
+  AK3_BRANCH : "master"
+
+  PATCHES_SOURCE : "JackA1ltman/NonGKI_Kernel_Patches"
+  PATCHES_BRANCH : "mi_kernel"
+
+  HOOK_METHOD : "syscall"
+
+jobs:
+  build-kernel:
+    name: Build Elish SukiSU Kernel
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup build environment
+        uses: ./.github/workflows/build-env
+
+      - name: Get kernel source
+        uses: ./.github/workflows/build-ready
+
+      - name: Apply SukiSU patches
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          # Clone SukiSU Ultra
+          git clone https://github.com/SukiSU-Ultra/SukiSU-Ultra KernelSU --depth=1
+          # Create symlink
+          ln -sf "$GITHUB_WORKSPACE/device_kernel/KernelSU/kernel" drivers/kernelsu
+          # Add to Makefile
+          echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+          # Add to Kconfig
+          sed -i '/endmenu/i\source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          echo "[+] SukiSU Ultra integrated"
+
+      - name: Apply SUSFS patches
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          cp /tmp/Patches/Patch/susfs_patch_to_4.19.patch ./
+          patch -p1 < susfs_patch_to_4.19.patch || true
+          echo "[+] SUSFS patches applied"
+
+      - name: Apply syscall hook patches
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          cp /tmp/Patches/syscall_hook_patches.sh ./
+          bash syscall_hook_patches.sh
+          echo "[+] Syscall hooks applied"
+
+      - name: Configure defconfig
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          echo "CONFIG_KSU=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KALLSYMS=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KALLSYMS_ALL=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KSU_SUSFS=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> ./arch/${{ env.KERNEL_ARCH }}/configs/${{ env.DEFCONFIG_NAME }}
+          echo "[+] Defconfig modified"
+
+      - name: Build kernel
+        uses: ./.github/workflows/build-process
+
+      - name: Pack kernel
+        uses: ./.github/workflows/pack-process
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACK_NAME }}
+          path: ${{ env.DEVICE_CODENAME }}-*.zip
