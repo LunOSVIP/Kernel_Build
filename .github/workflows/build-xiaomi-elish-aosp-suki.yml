@@ -19,11 +19,9 @@ env:
   # for hand-written .S rules (see "Extra Kernel Options").
   # LLVM_IAS is a 5.x var and is ignored by this 4.19 tree, so it cannot be relied on.
   CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
-  # KCFLAGS=-fno-builtin-stpcpy: elish 4.19 has no stpcpy() in lib/string.c, but clang-14
-  # lowers `sprintf(dst,"%s%d",...)` in show_cons_active() to a stpcpy() call, which then
-  # fails at vmlinux link with "undefined reference to stpcpy". Disabling the builtin stops
-  # the lowering and keeps the sprintf call (defined in lib/vsprintf.c).
-  EXTRA_CMDS : "LLVM=1 KCFLAGS=-fno-builtin-stpcpy"
+  # P0 bisect: drop LLVM=1 so 4.19 falls back to GNU ld from the bundled gcc-4.9 tools.
+  # Keep the stpcpy workaround unchanged so this run isolates the linker variable only.
+  EXTRA_CMDS : "KCFLAGS=-fno-builtin-stpcpy"
 
   # MiCode elish source is QGKI 4.19.113 (Android R) only; the device ships Android 13
   # (MIUI V816.0.2.0.TKYCNXM) on 4.19.157-perf-gf8cf95f4dc15. Android-R kernel + A13
